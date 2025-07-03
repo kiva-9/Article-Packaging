@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jackery文章打包工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1a73e8;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .file-input-wrapper {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .file-input-wrapper:hover {
+            background-color: #eef4ff;
+            border-color: #1a73e8;
+        }
+        /* 通过CSS隐藏原始的、样式不美观的文件输入框 */
+        input[type="file"] { 
+            display: none; 
+        }
+        label { font-weight: bold; }
+        .file-label { color: #1a73e8; }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            border-left: 5px solid #1a73e8;
+            font-family: "Courier New", Courier, monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .info, .advanced-options {
+            font-size: 0.9em;
+            color: #666;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .advanced-options label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .advanced-options input {
+            margin-right: 8px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Jackery文章打包工具</h1>
+        <p class="info" style="text-align:center;">
+            <strong>使用方法：</strong> 本工具会将原始Word文档和提取出的所有图片，直接放在同一个压缩包内供您下载，下载解压后，可方便进行重命名，然后交付客户。
+        </p>
+
+        <label for="wordFiles" class="file-input-wrapper file-label">
+            <span id="file-label-text">点击此处选择或拖拽 .docx 文件</span>
+        </label>
+        
+        <input type="file" id="wordFiles" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple>
+        <div class="advanced-options">
+            <label for="resizeCheckbox">
+                <input type="checkbox" id="resizeCheckbox">
+                <strong>高级功能：</strong>自动调整宽尺寸图片
+            </label>
+            <p style="font-size: 0.85em; margin: 5px 0 0 0; color: #555;">
+                如果图片宽度超过 1200 像素，则自动等比例将其缩放至宽度为 1200 像素。宽度小于等于 1200 像素的图片保持不变。
+            </p>
+        </div>
+
+        <button id="processBtn" disabled>开始处理</button>
+        <div id="status">处理过程将显示在这里...</div>
+    </div>
+
+    <script>
+        // ... JavaScript代码部分完全无需修改，是正确的 ...
+        const fileInput = document.getElementById('wordFiles');
+        const processBtn = document.getElementById('processBtn');
+        const statusDiv = document.getElementById('status');
+        const fileLabelText = document.getElementById('file-label-text');
+        const resizeCheckbox = document.getElementById('resizeCheckbox');
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                processBtn.disabled = false;
+                fileLabelText.textContent = fileInput.files.length === 1 
+                    ? `已选择文件：${fileInput.files[0].name}` 
+                    : `已选择 ${fileInput.files.length} 个文件`;
+            } else {
+                processBtn.disabled = true;
+                fileLabelText.textContent = '点击此处选择或拖拽 .docx 文件';
+            }
+        });
+
+        processBtn.addEventListener('click', async () => {
+            if (fileInput.files.length === 0) return;
+            
+            processBtn.disabled = true;
+            processBtn.textContent = '正在处理中...';
+            clearStatus();
+            logStatus(`检测到 ${fileInput.files.length} 个文件，开始处理...`);
+
+            for (const file of fileInput.files) {
+                await processSingleFile(file);
+            }
+
+            logStatus("\n所有文件处理完毕！");
+            processBtn.disabled = false;
+            processBtn.textContent = '开始处理';
+            fileInput.value = '';
+            fileLabelText.textContent = '点击此处选择或拖拽 .docx 文件';
+        });
+
+        async function processSingleFile(file) {
+            logStatus(`\n--- 开始处理文件: ${file.name} ---`);
+            const baseFileName = file.name.replace(/\.docx$/, '');
+            const shouldResize = resizeCheckbox.checked;
+
+            try {
+                const zip = await JSZip.loadAsync(file);
+                const imageFolder = zip.folder("word/media");
+                if (!imageFolder) {
+                    logStatus(`-> [${file.name}] 未找到图片，处理结束。`);
+                    return;
+                }
+                
+                const imagePromises = [];
+                imageFolder.forEach((relativePath, fileEntry) => {
+                    if (!fileEntry.dir) {
+                        imagePromises.push(fileEntry.async('blob').then(blob => ({ name: relativePath, blob })));
+                    }
+                });
+                
+                if (imagePromises.length === 0) {
+                    logStatus(`-> [${file.name}] 未找到图片，处理结束。`);
+                    return;
+                }
+                
+                let images = await Promise.all(imagePromises);
+                logStatus(`-> [${file.name}] 发现 ${images.length} 张图片，正在提取...`);
+                
+                const outputZip = new JSZip();
+                outputZip.file(file.name, file);
+                logStatus(`-> [${file.name}] 已将原始文件添加至压缩包。`);
+                
+                for (const img of images) {
+                    let finalBlob = img.blob;
+                    if (shouldResize) {
+                        logStatus(`   - 正在处理图片: ${img.name}`);
+                        try {
+                           finalBlob = await resizeImageIfNeeded(img.blob, 1200);
+                        } catch (e) {
+                           logStatus(`     ! 处理失败，使用原图: ${e.message}`);
+                        }
+                    }
+                    outputZip.file(img.name, finalBlob);
+                }
+
+                logStatus(`-> [${file.name}] 已添加所有图片，正在生成 ZIP 文件...`);
+                const zipBlob = await outputZip.generateAsync({ type: "blob" });
+                
+                saveAs(zipBlob, `${baseFileName}_extracted.zip`);
+                logStatus(`-> [${file.name}] 处理完成！已触发下载。`);
+
+            } catch (error) {
+                logStatus(`-> [${file.name}] 处理失败: ${error.message}`);
+                console.error("处理文件时出错:", error);
+            }
+        }
+        
+        function resizeImageIfNeeded(imageBlob, maxDimension) {
+            return new Promise((resolve, reject) => {
+                const objectURL = URL.createObjectURL(imageBlob);
+                const img = new Image();
+
+                img.onload = () => {
+                    const width = img.width;
+                    const height = img.height;
+                    
+                    logStatus(`     尺寸: ${width}x${height}`);
+
+                    if (width <= maxDimension) {
+                        logStatus(`     -> 宽度未超限，无需调整`);
+                        URL.revokeObjectURL(objectURL);
+                        resolve(imageBlob);
+                        return;
+                    }
+
+                    logStatus(`     -> 宽度超限，正在调整...`);
+                    
+                    const newWidth = maxDimension;
+                    const newHeight = (height / width) * maxDimension;
+                    
+                    const finalWidth = Math.round(newWidth);
+                    const finalHeight = Math.round(newHeight);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = finalWidth;
+                    canvas.height = finalHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    ctx.drawImage(img, 0, 0, finalWidth, finalHeight);
+                    
+                    canvas.toBlob(
+                        (newBlob) => {
+                            logStatus(`     -> 新尺寸: ${finalWidth}x${finalHeight}`);
+                            URL.revokeObjectURL(objectURL);
+                            resolve(newBlob);
+                        },
+                        imageBlob.type, 
+                        0.9 
+                    );
+                };
+
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectURL);
+                    reject(new Error('无法加载图片'));
+                };
+                
+                img.src = objectURL;
+            });
+        }
+
+        function logStatus(message) {
+            statusDiv.textContent += message + '\n';
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+
+        function clearStatus() {
+            statusDiv.textContent = '';
+        }
+    </script>
+</body>
+</html>
