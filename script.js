@@ -181,10 +181,10 @@ window.onload = () => {
                     processedBlock = processedBlock.replace(/<\/p>/g, '</p>\n<p>&nbsp;</p>');
                 }
                 if (processedBlock.startsWith('<h2>')) {
-                    processedBlock = processedBlock.replace('<h2>', '<h2 style="margin-top: 24rem">');
+                    processedBlock = processedBlock.replace('<h2>', '<h2 style="margin-top: 24px">');
                 }
                 if (processedBlock.startsWith('<h3>')) {
-                    processedBlock = processedBlock.replace('<h3>', '<h3 style="margin-top: 24rem">');
+                    processedBlock = processedBlock.replace('<h3>', '<h3 style="margin-top: 24px">');
                 }
                 finalHtmlParts.push(processedBlock);
             }
