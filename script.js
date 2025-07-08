@@ -183,6 +183,9 @@ window.onload = () => {
                 if (processedBlock.startsWith('<h2>')) {
                     processedBlock = processedBlock.replace('<h2>', '<h2 style="margin-top: 24rem">');
                 }
+                if (processedBlock.startsWith('<h3>')) {
+                    processedBlock = processedBlock.replace('<h3>', '<h3 style="margin-top: 24rem">');
+                }
                 finalHtmlParts.push(processedBlock);
             }
         }
