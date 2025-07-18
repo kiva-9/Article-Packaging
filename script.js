@@ -206,7 +206,11 @@ window.onload = () => {
 
         logStatus("  - 正在创建ZIP压缩包...");
         const outputZip = new JSZip();
-        outputZip.file(`${createSafeFilename(h1Text)}.html`, finalFileContent);
+        const baseFilename = createSafeFilename(h1Text); 
+
+        // 同时创建 .html 和 .txt 文件，它们的内容都是 finalFileContent
+        outputZip.file(`${baseFilename}.html`, finalFileContent);
+        outputZip.file(`${baseFilename}.txt`, finalFileContent);
 
         for (const img of fileData.images) {
             const newFileName = `${createSafeFilename(img.altText)}.${img.extension}`;
