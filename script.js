@@ -239,6 +239,12 @@ window.onload = () => {
 
         let finalHtmlBody = finalHtmlParts.join('\n\n');
         
+        // [您的替换方案] 在这里进行简单粗暴的替换
+        logStatus("  - [清理] 正在将连续3个以上的空行替换为2个...");
+        const threeOrMoreEmptyPs = /(<p>&nbsp;<\/p>\s*){3,}/g;
+        const twoEmptyPs = '<p>&nbsp;</p>\n<p>&nbsp;</p>';
+        finalHtmlBody = finalHtmlBody.replace(threeOrMoreEmptyPs, twoEmptyPs);
+
         logStatus("  - 格式化HTML代码使其美观...");
         const formattedBody = html_beautify(finalHtmlBody, {
             indent_size: 2,
