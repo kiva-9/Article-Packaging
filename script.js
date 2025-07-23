@@ -153,15 +153,16 @@ window.onload = () => {
         }, 3000);
     }
     
-// 请将原有的 processSingleFile 函数替换为以下内容
-
+// [最终修复版 V5 - “魔法词”居中方案] 请用此函数完整替换旧的 processSingleFile 函数
     async function processSingleFile(fileData) {
         logStatus("  - 正在读取文件内容...");
         const arrayBuffer = await fileData.file.arrayBuffer();
-        
+
         let imageCounter = 0;
-        
+
         logStatus("  - [流程] 步骤1: 按顺序生成带标记的初步HTML...");
+
+        // [重大调整] 移除所有 styleMap 相关的代码，因为对您的文档无效。
         const options = {
             convertImage: mammoth.images.imgElement(image => {
                 const imgData = fileData.images[imageCounter];
@@ -175,92 +176,85 @@ window.onload = () => {
         };
         let { value: preliminaryHtml } = await mammoth.convertToHtml({ arrayBuffer }, options);
 
-        // ===================== H1标题处理：步骤1 开始 (无变化) =====================
         const { value: rawText } = await mammoth.extractRawText({ arrayBuffer });
         const h1Text = (rawText.split('\n')[0] || fileData.originalName.replace(/\.docx$/, '')).trim();
         preliminaryHtml = preliminaryHtml.replace(/<h1>[\s\S]*?<\/h1>/, '');
         logStatus(`  - 已提取文章标题: ${h1Text}`);
-        // ===================== H1标题处理：步骤1 结束 (无变化) =====================
-
-
+        
         logStatus("  - [流程] 步骤2: 逐段处理并重建HTML...");
-        // [MODIFIED] 增加了 h4 标签的匹配
         const blockRegex = /(<(p|h2|h3|h4|ul|ol|table)[\s\S]*?<\/\2>)/g;
         const htmlBlocks = preliminaryHtml.match(blockRegex) || [];
-        
+
         const finalHtmlParts = [];
 
-        // [MODIFIED] 改为使用索引循环，方便“向前看”
         for (let i = 0; i < htmlBlocks.length; i++) {
-            const block = htmlBlocks[i];
+            let block = htmlBlocks[i];
             let processedBlock = block;
             const imageMatch = processedBlock.match(/---IMG-GUID-(\d+)---/);
-            
+
             if (imageMatch) {
                 logStatus("  - 发现图片段落，正在应用特殊规则...");
                 const index = parseInt(imageMatch[1]);
                 const imgData = fileData.images[index];
 
                 if (imgData) {
-                    // [MODIFIED 1.1] src 使用 ALT 文本占位符，例如 {{a-black-dog}}
                     const placeholder = `{{${createSafeFilename(imgData.altText)}}}`;
-                    
-                    // [MODIFIED 1.2 & 1.3] 移除斜体描述，并在前后各增加两个 <p>&nbsp;</p> 空行
                     const imageHtmlBlock = `<p>&nbsp;</p>\n<p>&nbsp;</p>\n<p style="text-align:center"><img alt="${imgData.altText}" src="${placeholder}" style="height:${imgData.dimensions.height}px; width:${imgData.dimensions.width}px" /></p>\n<p>&nbsp;</p>\n<p>&nbsp;</p>`;
-                    
                     finalHtmlParts.push(imageHtmlBlock);
                     logStatus(`    - 已插入图片占位符: ${placeholder}`);
                 }
             } else {
-                // [MODIFIED 2.1] 段落间距处理逻辑
+                // [新增] "魔法词"居中方案
+                const centerMarker = '[center]';
+                if (processedBlock.includes(centerMarker)) {
+                    logStatus(`  - 检测到居中标记 "[center]"，正在应用居中样式...`);
+                    // 为该块添加居中样式。这是一个简单但有效的实现。
+                    processedBlock = processedBlock.replace('>', ' style="text-align: center;">');
+                    // 移除魔法词本身，避免它显示在最终内容中
+                    processedBlock = processedBlock.replace(centerMarker, '');
+                }
+
                 if (processedBlock.startsWith('<p>')) {
-                    // 向前看一位，只有当下一个块也是<p>时，才在当前块后加空行
                     const nextBlock = htmlBlocks[i + 1];
                     if (nextBlock && nextBlock.startsWith('<p>')) {
-                        // 在块的末尾追加，而不是替换，避免了多个</p>标签的问题
                         processedBlock = processedBlock + '\n<p>&nbsp;</p>';
                     }
                 }
                 
-                // [MODIFIED 2.2] 统一处理 h2, h3, h4 的样式
-                if (processedBlock.startsWith('<h2>')) {
-                    processedBlock = processedBlock.replace('<h2>', '<h2 style="margin-top: 24rem">');
+                // [修改] 调整标题处理逻辑，使其能与上面的“魔法词”方案正确配合
+                const headingMatch = processedBlock.match(/^<(h[234])/);
+                if (headingMatch) {
+                    if (processedBlock.includes('style="')) {
+                        // 如果已经有style（说明它被上面的魔法词居中了），我们就在里面追加样式
+                        processedBlock = processedBlock.replace('style="', `style="margin-top: 24rem; `);
+                    } else {
+                        // 如果没有style，就创建一个新的
+                        const headingTag = headingMatch[1]; 
+                        processedBlock = processedBlock.replace(`<${headingTag}>`, `<${headingTag} style="margin-top: 24rem">`);
+                    }
                 }
-                if (processedBlock.startsWith('<h3>')) {
-                    processedBlock = processedBlock.replace('<h3>', '<h3 style="margin-top: 24rem">');
-                }
-                if (processedBlock.startsWith('<h4>')) {
-                    processedBlock = processedBlock.replace('<h4>', '<h4 style="margin-top: 24rem">');
-                }
-                
                 finalHtmlParts.push(processedBlock);
             }
         }
 
         let finalHtmlBody = finalHtmlParts.join('\n\n');
         
-        // [您的替换方案] 在这里进行简单粗暴的替换
-        logStatus("  - [清理] 正在将连续3个以上的空行替换为2个...");
         const threeOrMoreEmptyPs = /(<p>&nbsp;<\/p>\s*){3,}/g;
         const twoEmptyPs = '<p>&nbsp;</p>\n<p>&nbsp;</p>';
         finalHtmlBody = finalHtmlBody.replace(threeOrMoreEmptyPs, twoEmptyPs);
 
-        logStatus("  - 格式化HTML代码使其美观...");
         const formattedBody = html_beautify(finalHtmlBody, {
             indent_size: 2,
             space_in_empty_paren: true,
             wrap_line_length: 120
         });
-        
-        // ===================== H1标题处理：步骤2 开始 (无变化) =====================
+
         const finalFileContent = h1Text + '\n\n' + formattedBody;
-        // ===================== H1标题处理：步骤2 结束 (无变化) =====================
 
         logStatus("  - 正在创建ZIP压缩包...");
         const outputZip = new JSZip();
-        const baseFilename = createSafeFilename(h1Text); 
+        const baseFilename = createSafeFilename(h1Text);
 
-        // 同时创建 .html 和 .txt 文件，它们的内容都是 finalFileContent
         outputZip.file(`${baseFilename}.html`, finalFileContent);
         outputZip.file(`${baseFilename}.txt`, finalFileContent);
 
